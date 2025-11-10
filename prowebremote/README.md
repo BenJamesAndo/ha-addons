@@ -34,7 +34,7 @@ Your browser only sees secure `wss://` connections to Home Assistant. The nginx 
 1. Add this repository to Home Assistant:
    - Navigate to **Settings** → **Add-ons** → **Add-on Store**
    - Click **⋮** menu → **Repositories**
-   - Add: `https://github.com/BenJamesAndo/hassio-addons`
+   - Add: `https://github.com/BenJamesAndo/ha-addons`
 
 2. Install **ProWebRemote**:
    - Find it in the add-on store
@@ -80,7 +80,7 @@ Your browser only sees secure `wss://` connections to Home Assistant. The nginx 
 
 ## Support
 
-- [GitHub Issues](https://github.com/BenJamesAndo/hassio-addons/issues)
+- [GitHub Issues](https://github.com/BenJamesAndo/ha-addons/issues)
 - [ProPresenter Integration](https://github.com/BenJamesAndo/ha-propresenter)
 
 ## Credits

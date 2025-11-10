@@ -16,7 +16,7 @@ Adding this add-ons repository to your Home Assistant instance is simple:
 2. Click the **⋮** menu in the top right and select **Repositories**
 3. Add this repository URL:
    ```
-   https://github.com/BenJamesAndo/hassio-addons
+   https://github.com/BenJamesAndo/ha-addons
    ```
 4. Click **Add** → **Close**
 5. The add-ons will now appear in your add-on store
@@ -63,6 +63,6 @@ MIT License - see [LICENSE](LICENSE) file for details
 [armhf-shield]: https://img.shields.io/badge/armhf-yes-green.svg
 [armv7-shield]: https://img.shields.io/badge/armv7-yes-green.svg
 [i386-shield]: https://img.shields.io/badge/i386-yes-green.svg
-[license-shield]: https://img.shields.io/github/license/BenJamesAndo/hassio-addons.svg
+[license-shield]: https://img.shields.io/github/license/BenJamesAndo/ha-addons.svg
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2025.svg
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-production%20ready-brightgreen.svg
