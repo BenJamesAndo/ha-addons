@@ -27,24 +27,37 @@ Your browser only sees secure `wss://` connections to Home Assistant. The nginx 
 
 ## Installation
 
-1. Add this repository to Home Assistant:
-   - Navigate to **Settings** → **Add-ons** → **Add-on Store**
-   - Click **⋮** menu → **Repositories**
-   - Add: `https://github.com/BenJamesAndo/ha-addons`
+Adding this add-ons repository to your Home Assistant instance is simple:
 
-2. Install **ProWebRemote**:
-   - Find it in the add-on store
+**One-Click Installation:**
+
+[![Add Repository to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https://github.com/BenJamesAndo/ha-addons)
+
+**Manual Installation:**
+
+1. Navigate to **Settings** → **Add-ons** → **Add-on Store**
+2. Click the **⋮** menu in the top right and select **Repositories**
+3. Add this repository URL:
+   ```
+   https://github.com/BenJamesAndo/ha-addons
+   ```
+4. Click **Add** → **Close**
+5. The add-ons will now appear in your add-on store
+
+## Setup
+
+1. Install **ProWebRemote**:
    - Click **Install**
 
-3. Configure the add-on:
+2. Configure the add-on:
    - Set your ProPresenter host IP address
-   - Set the port (usually 1025 or 51482)
+   - Set the port
    - Set your ProPresenter password
    - Adjust user preferences as needed
 
-4. Start the add-on
+3. Start the add-on
 
-5. Enable **"Show in sidebar"** to access from the HA menu
+4. Enable **"Show in sidebar"** to access from the HA menu
 
 ## Configuration
 
