@@ -8,6 +8,12 @@ This repository contains custom Home Assistant add-ons.
 
 Adding this add-ons repository to your Home Assistant instance is simple:
 
+**One-Click Installation:**
+
+[![Add Repository to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https://github.com/BenJamesAndo/ha-addons)
+
+**Manual Installation:**
+
 1. Navigate to **Settings** → **Add-ons** → **Add-on Store**
 2. Click the **⋮** menu in the top right and select **Repositories**
 3. Add this repository URL:
@@ -16,7 +22,6 @@ Adding this add-ons repository to your Home Assistant instance is simple:
    ```
 4. Click **Add** → **Close**
 5. The add-ons will now appear in your add-on store
-
 ## Add-ons
 
 This repository contains the following add-ons:
