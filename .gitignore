@@ -1,0 +1,24 @@
+# Compiled files
+*.pyc
+*.pyo
+__pycache__/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.bak
+.tmp/
+
+# Secrets (just in case)
+*.key
+*.pem
+secrets.yaml

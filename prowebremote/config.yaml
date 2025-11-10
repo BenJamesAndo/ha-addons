@@ -1,0 +1,35 @@
+name: "ProWebRemote"
+description: "ProPresenter Web Remote with Ingress Support"
+version: "1.0.0"
+slug: prowebremote
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+  - i386
+init: false
+ingress: true
+ingress_port: 8080
+panel_icon: mdi:presentation
+panel_title: ProPresenter Remote
+options:
+  propresenter_host: "192.168.1.167"
+  propresenter_port: 51482
+  propresenter_password: "7777777"
+  must_authenticate: true
+  change_host: false
+  continuous_playlist: true
+  retrieve_entire_library: false
+  force_slides: false
+  follow_propresenter: true
+schema:
+  propresenter_host: str
+  propresenter_port: int
+  propresenter_password: str
+  must_authenticate: bool
+  change_host: bool
+  continuous_playlist: bool
+  retrieve_entire_library: bool
+  force_slides: bool
+  follow_propresenter: bool
