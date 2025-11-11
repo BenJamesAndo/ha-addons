@@ -69,8 +69,17 @@ function onOpen() {
 }
 
 function onMessage(evt) {
-    var obj = JSON.parse(evt.data);
-    console.log(obj);
+    // Ignore empty messages
+    if (!evt.data || evt.data.trim() === "") {
+        return;
+    }
+    try {
+        var obj = JSON.parse(evt.data);
+        console.log(obj);
+    } catch (e) {
+        console.error("JSON parse error:", e, "Raw data:", evt.data);
+        return;
+    }
     if (obj.action == "authenticate" && obj.authenticated == "1" && authenticated == false) {
         // If the data is stale
         if (refresh) {
@@ -246,12 +255,12 @@ function onMessage(evt) {
         createStageScreens(obj);
     } else if (obj.action == "presentationCurrent") {
         // If this presentation has images, process normally
-        if (obj.presentation.presentationSlideGroups.length > 0) {
+        if (obj.presentation && obj.presentation.presentationSlideGroups && obj.presentation.presentationSlideGroups.length > 0) {
             if (obj.presentation.presentationSlideGroups[0].groupSlides[0].slideImage != "") {
                 // Create presentation
                 createPresentation(obj);
             }
-        } else {
+        } else if (obj.presentation) {
             // Compare presentations
             comparePresentations(obj);
         }
@@ -3279,7 +3288,7 @@ function getSlideLabel(slideLabel, groupLabel) {
     if (serverIsWindows) {
         return slideLabel;
     } else {
-        if (slideLabel != groupLabel) {
+        if (slideLabel != null && slideLabel !== undefined && slideLabel != groupLabel) {
             return slideLabel;
         } else {
             return "";
