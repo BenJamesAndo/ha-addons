@@ -36,6 +36,7 @@ echo "ProPresenter: ${PROPRESENTER_HOST}:${PROPRESENTER_PORT}"
 mkdir -p /etc/nginx/http.d
 
 # Patch config.js with connection settings
+# Note: When changeHost is enabled, these are just defaults - users can override via web UI
 cat > /var/www/html/js/config.js <<JSEOF
 // Connection
 var host = "${PROPRESENTER_HOST}";
@@ -50,7 +51,7 @@ sed -i "s|var retrieveEntireLibrary = .*;|var retrieveEntireLibrary = ${RETRIEVE
 sed -i "s|var forceSlides = .*;|var forceSlides = ${FORCE_SLIDES};|" /var/www/html/js/site.js
 sed -i "s|var followProPresenter = .*;|var followProPresenter = ${FOLLOW_PROPRESENTER};|" /var/www/html/js/site.js
 sed -i "s|var mustAuthenticate = .*;|var mustAuthenticate = ${MUST_AUTHENTICATE};|" /var/www/html/js/site.js
-sed -i "s|var changeHost = .*;|var changeHost = ${CHANGE_HOST};|" /var/www/html/js/site.js
+sed -i "s|var changeHost = .*;|var changeHost = false;|" /var/www/html/js/site.js
 
 cat > /etc/nginx/http.d/default.conf <<EOF
 upstream propresenter {
