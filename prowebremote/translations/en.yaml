@@ -4,10 +4,10 @@ configuration:
     description: IP address of your ProPresenter computer
   propresenter_port:
     name: ProPresenter Port
-    description: ProPresenter Remote Control port (usually 1025 or 51482)
+    description: ProPresenter Network port
   propresenter_password:
-    name: ProPresenter Password
-    description: Remote control password configured in ProPresenter
+    name: ProPresenter Controller Password
+    description: ProPresenter Remote Classic Controller password
   must_authenticate:
     name: Require Authentication
     description: Whether authentication is required to connect (recommended)
