@@ -6,24 +6,18 @@ Access ProPresenter's WebSocket API securely over HTTPS through Home Assistant's
 
 ## About
 
-ProWebRemote is a web-based remote control for ProPresenter. However, it only supports insecure `ws://` WebSocket connections, which don't work when accessing Home Assistant over HTTPS due to mixed content restrictions.
+[ProWebRemote](https://github.com/L2N6H5B3/ProWebRemote) is a web-based remote control for ProPresenter. However, it only supports insecure `ws://` WebSocket connections, which don't work when accessing Home Assistant over HTTPS due to mixed content restrictions.
 
 This add-on wraps ProWebRemote with an ingress-enabled nginx proxy, allowing you to:
 
-- 🔒 **Access ProPresenter over HTTPS** - No more mixed content errors
-- 🌐 **Remote access from anywhere** - Works over WAN through your HA instance
-- 📱 **Sidebar integration** - Add to HA sidebar for easy access
-- ⚙️ **Configurable preferences** - Control authentication, playlists, and more
+-  **Access ProPresenter over HTTPS**
+-  **Remote access from anywhere**
+-  **Sidebar** - Add to HA sidebar for easy access
+-  **Configurable preferences**
 
-## How It Works
+## Screenshot
+<img width="1917" height="925" alt="image" src="https://github.com/user-attachments/assets/0018fa65-788c-4dc6-b94d-434e8cf163e5" />
 
-```
-Browser → HTTPS → Home Assistant → Ingress Proxy → WS → ProPresenter
-  🔒              🔒                ↓                    ⚠️
-Secure          Secure        Internal LAN         Unencrypted
-```
-
-Your browser only sees secure `wss://` connections to Home Assistant. The nginx proxy handles the insecure `ws://` connection to ProPresenter internally on your local network.
 
 ## Installation
 
@@ -63,29 +57,23 @@ Adding this add-ons repository to your Home Assistant instance is simple:
 
 ### Connection Settings
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `propresenter_host` | IP address of your ProPresenter computer | `192.168.1.167` |
-| `propresenter_port` | ProPresenter Remote Control port | `51482` |
-| `propresenter_password` | Remote control password | `7777777` |
+ProPresenter IP Address
+ProPresenter Port
+ProPresenter Controller Password
 
 ### User Preferences
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `must_authenticate` | Require authentication to connect | `true` |
-| `change_host` | Show IP/port fields in UI (disable for ingress-only) | `false` |
-| `continuous_playlist` | Enable continuous playlist playback | `true` |
-| `retrieve_entire_library` | Load all library items at startup (may be slow) | `false` |
-| `force_slides` | Always show slide previews | `false` |
-| `follow_propresenter` | Automatically follow ProPresenter's display | `true` |
+Require Authentication
+Continuous Playlist Mode
+Retrive Entire Library
+Force Slides View
+Follow ProPresenter Display
 
 ## Usage
 
 1. Enable "Show in sidebar" in the add-on configuration
 2. Click **ProPresenter Remote** in the Home Assistant sidebar
-3. Click **Connect** (authentication should be automatic if configured)
-4. Control ProPresenter from anywhere!
+3. Control ProPresenter from anywhere
 
 ## Support
 
@@ -103,8 +91,4 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ---
 
-[aarch64-shield]: https://img.shields.io/badge/aarch64-yes-green.svg
 [amd64-shield]: https://img.shields.io/badge/amd64-yes-green.svg
-[armhf-shield]: https://img.shields.io/badge/armhf-yes-green.svg
-[armv7-shield]: https://img.shields.io/badge/armv7-yes-green.svg
-[i386-shield]: https://img.shields.io/badge/i386-yes-green.svg
