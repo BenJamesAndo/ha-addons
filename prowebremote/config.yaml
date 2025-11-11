@@ -10,9 +10,9 @@ ingress_port: 8080
 panel_icon: mdi:presentation
 panel_title: ProPresenter Remote
 options:
-  propresenter_host: "192.168.1.167"
-  propresenter_port: 51482
-  propresenter_password: "7777777"
+  propresenter_host: ""
+  propresenter_port: ""
+  propresenter_password: ""
   must_authenticate: true
   continuous_playlist: true
   retrieve_entire_library: false
