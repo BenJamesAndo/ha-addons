@@ -1,6 +1,6 @@
 name: "ProWebRemote"
 description: "ProPresenter Web Remote with Ingress Support"
-version: "1.0.0"
+version: "1.0.1"
 slug: prowebremote
 arch:
   - amd64
