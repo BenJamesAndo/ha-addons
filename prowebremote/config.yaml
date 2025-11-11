@@ -14,7 +14,6 @@ options:
   propresenter_port: 51482
   propresenter_password: "7777777"
   must_authenticate: true
-  change_host: false
   continuous_playlist: true
   retrieve_entire_library: false
   force_slides: false
@@ -24,7 +23,6 @@ schema:
   propresenter_port: int
   propresenter_password: str
   must_authenticate: bool
-  change_host: bool
   continuous_playlist: bool
   retrieve_entire_library: bool
   force_slides: bool
