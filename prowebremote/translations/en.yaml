@@ -11,9 +11,6 @@ configuration:
   must_authenticate:
     name: Require Authentication
     description: Whether authentication is required to connect (recommended)
-  change_host:
-    name: Allow Changing Host
-    description: Show IP/port fields in UI (disable for ingress-only access)
   continuous_playlist:
     name: Continuous Playlist Mode
     description: Enable continuous playlist playback
