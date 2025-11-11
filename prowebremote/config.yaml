@@ -10,9 +10,9 @@ ingress_port: 8080
 panel_icon: mdi:presentation
 panel_title: ProPresenter Remote
 options:
-  propresenter_host: ""
-  propresenter_port: ""
-  propresenter_password: ""
+  propresenter_host: null
+  propresenter_port: null
+  propresenter_password: null
   must_authenticate: true
   continuous_playlist: true
   retrieve_entire_library: false
@@ -21,7 +21,7 @@ options:
 schema:
   propresenter_host: str
   propresenter_port: int
-  propresenter_password: str
+  propresenter_password: str?
   must_authenticate: bool
   continuous_playlist: bool
   retrieve_entire_library: bool
