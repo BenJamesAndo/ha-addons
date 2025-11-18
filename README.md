@@ -33,10 +33,10 @@ This repository contains the following add-ons:
 Access ProPresenter's WebSocket API securely over HTTPS through Home Assistant's ingress system.
 
 **Features:**
-- 🔒 HTTPS support for ProPresenter's WebSocket API
-- 🌐 Secure remote access from anywhere
-- ⚙️ Configurable user preferences
-- 📱 Sidebar integration
+- HTTPS support for ProPresenter's WebSocket API
+- Secure remote access from anywhere
+- Configurable user preferences
+- Sidebar integration
 
 ## Support
 
