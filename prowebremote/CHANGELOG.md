@@ -1,12 +1,12 @@
 # ProWebRemote Addon Changelog
 
-## Version 2.0 - OpenAPI Support
+## Version 2.0-beta - OpenAPI Support
 
 ### New Features
 
-- **OpenAPI v1 Support**: Full implementation of ProPresenter's OpenAPI. Supports v7.9.1 and up
+- **OpenAPI v1 Support**: Almost full implementation of ProPresenter's OpenAPI. Supports v7.9.1 and up
   
-- **Dual API Mode**: Choose between Classic WebSocket or OpenAPI
+- **Backwards Compatible**: Choose between Classic WebSocket or OpenAPI
 
 ### Notes
 
