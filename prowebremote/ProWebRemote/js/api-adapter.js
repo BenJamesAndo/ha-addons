@@ -877,14 +877,13 @@ var ProPresenterAPI = (function() {
                                         // console.log('OpenAPI: Nested playlist', childName, 'has', items.length, 'items');
                                         var playlistItems = [];
                                         if (items && Array.isArray(items)) {
-                                            items.forEach(function(item) {
-                                                var itemType = item.type || 'presentation';
-                                                var mappedType = 'playlistItemTypePresentation';
-                                                if (itemType === 'header') mappedType = 'playlistItemTypeHeader';
-                                                else if (itemType === 'video') mappedType = 'playlistItemTypeVideo';
-                                                else if (itemType === 'audio') mappedType = 'playlistItemTypeAudio';
-                                                
-                                                // For playlist items, use the item UUID as unique identifier
+                            items.forEach(function(item) {
+                                var itemType = item.type || 'presentation';
+                                var mappedType = 'playlistItemTypePresentation';
+                                if (itemType === 'header') mappedType = 'playlistItemTypeHeader';
+                                else if (itemType === 'placeholder') mappedType = 'playlistItemTypePlaceholder';
+                                else if (itemType === 'video') mappedType = 'playlistItemTypeVideo';
+                                else if (itemType === 'audio') mappedType = 'playlistItemTypeAudio';                                                // For playlist items, use the item UUID as unique identifier
                                                 // Store presentation UUID separately for API calls
                                                 var itemUuid = item.id ? item.id.uuid : '';
                                                 var presentationUuid = '';
@@ -954,15 +953,14 @@ var ProPresenterAPI = (function() {
                             // console.log('OpenAPI: Playlist', playlistName, 'has', items.length, 'items');
                             var playlistItems = [];
                             if (items && Array.isArray(items)) {
-                                items.forEach(function(item) {
-                                    // Map item types
-                                    var itemType = item.type || 'presentation';
-                                    var mappedType = 'playlistItemTypePresentation';
-                                    if (itemType === 'header') mappedType = 'playlistItemTypeHeader';
-                                    else if (itemType === 'video') mappedType = 'playlistItemTypeVideo';
-                                    else if (itemType === 'audio') mappedType = 'playlistItemTypeAudio';
-                                    
-                                    // For playlist items, use the item UUID as unique identifier
+                items.forEach(function(item) {
+                    // Map item types
+                    var itemType = item.type || 'presentation';
+                    var mappedType = 'playlistItemTypePresentation';
+                    if (itemType === 'header') mappedType = 'playlistItemTypeHeader';
+                    else if (itemType === 'placeholder') mappedType = 'playlistItemTypePlaceholder';
+                    else if (itemType === 'video') mappedType = 'playlistItemTypeVideo';
+                    else if (itemType === 'audio') mappedType = 'playlistItemTypeAudio';                                    // For playlist items, use the item UUID as unique identifier
                                     // Store presentation UUID separately for API calls
                                     var itemUuid = item.id ? item.id.uuid : '';
                                     var presentationUuid = '';

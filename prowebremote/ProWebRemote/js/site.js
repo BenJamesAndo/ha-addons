@@ -2610,6 +2610,8 @@ function displayPlaylist(obj) {
                         // Find the playlist item type
                         if (this.playlistItemType == "playlistItemTypeHeader") {
                             data += '<a onclick="displayPresentation(this);"><div id="' + this.playlistItemLocation + '" class="item head"><div class="name">' + this.playlistItemName + '</div></div></a>';
+                        } else if (this.playlistItemType == "playlistItemTypePlaceholder") {
+                            data += '<a onclick="displayPresentation(this);"><div id="' + this.playlistItemLocation + '" class="item head"><div class="name">' + this.playlistItemName + '</div></div></a>';
                         } else if (this.playlistItemType == "playlistItemTypeVideo") {
                             data += '<a onclick="displayPresentation(this);"><div id="' + this.playlistItemLocation + '" class="item con pres"><img src="img/media.png" /><div class="name">' + this.playlistItemName + '</div></div></a>';
                         } else if (this.playlistItemType == "playlistItemTypeAudio") {
