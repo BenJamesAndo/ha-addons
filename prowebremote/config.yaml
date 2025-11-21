@@ -13,7 +13,7 @@ options:
   propresenter_host: null
   propresenter_port: null
   propresenter_password: ""
-  api_type: "Open API"
+  api_type: "OpenAPI"
   must_authenticate: false
   continuous_playlist: true
   retrieve_entire_library: false
@@ -23,7 +23,7 @@ schema:
   propresenter_host: str
   propresenter_port: int
   propresenter_password: str?
-  api_type: list(Open API|Classic)
+  api_type: list(OpenAPI|Classic)
   must_authenticate: bool
   continuous_playlist: bool
   retrieve_entire_library: bool
