@@ -272,15 +272,7 @@ function onMessage(evt) {
             var playlistRequest = findRequestByPath(playlistRequests, obj.presentationPath);
             if (playlistRequest != null) {
                 removeArrayValue(playlistRequests, playlistRequest);
-                
-                if (playlistRequests.length == 0) {
-                    // Get the current displayed presentation from ProPresenter
-                    getCurrentPresentation();
-                    // Show connected status
-                    $("#status").attr("class", "connected");
-                    // Fade out loading screen
-                    $(".loading").fadeOut();
-                }
+                checkPlaylistLoadingComplete();
             } else {
                 // Compare presentations (for updates to existing presentations)
                 comparePresentations(obj);
@@ -579,6 +571,47 @@ function setSlideColsCookie(int) {
 
 // End Settings Functions
 
+
+// Helper Functions
+
+function checkPlaylistLoadingComplete() {
+    if (playlistRequests.length == 0) {
+        // Get the current displayed presentation from ProPresenter
+        getCurrentPresentation();
+        // Show connected status
+        $("#status").attr("class", "connected");
+        // Fade out loading screen
+        $(".loading").fadeOut();
+    }
+}
+
+function checkItemInPlaylist(itemPath, playlistLocation) {
+    // Returns {isInPlaylist: boolean, itemIndex: number}
+    // For Classic: presentationPath is "playlist:index", check first part
+    // For OpenAPI: presentationPath is UUID, check if it's in current playlist
+    var isInPlaylist = false;
+    var itemIndex = 0;
+    
+    if (itemPath.includes(":")) {
+        // Classic format
+        isInPlaylist = (itemPath.split(":")[0] == playlistLocation);
+        itemIndex = parseInt(itemPath.split(":")[1]);
+    } else {
+        // OpenAPI format: Check if this item's UUID is in the current playlist
+        var currentPlaylistObj = playlistList.find(function(p) { return p.playlistLocation == playlistLocation; });
+        if (currentPlaylistObj && currentPlaylistObj.playlist) {
+            var foundIndex = currentPlaylistObj.playlist.findIndex(function(item) {
+                return item.playlistItemLocation == itemPath;
+            });
+            if (foundIndex !== -1) {
+                isInPlaylist = true;
+                itemIndex = foundIndex;
+            }
+        }
+    }
+    
+    return { isInPlaylist: isInPlaylist, itemIndex: itemIndex };
+}
 
 // Build Functions
 
@@ -1039,14 +1072,7 @@ function createPresentation(obj) {
                 // Remove the request from the array
                 removeArrayValue(playlistRequests, playlistRequest);
             }
-            if (playlistRequests.length == 0) {
-                // Get the current displayed presentation from ProPresenter
-                getCurrentPresentation();
-                // Show connected status
-                $("#status").attr("class", "connected");
-                // Fade out loading screen
-                $(".loading").fadeOut();
-            }
+            checkPlaylistLoadingComplete();
         } else {
             // For OpenAPI, also track in playlist if not in requests
             if (item == null) {
@@ -1054,12 +1080,7 @@ function createPresentation(obj) {
             }
             // Check if all presentations have been loaded
             if (playlistRequests.length == 0 && playlistPresentationList.length > 0) {
-                // Get the current displayed presentation from ProPresenter
-                getCurrentPresentation();
-                // Show connected status
-                $("#status").attr("class", "connected");
-                // Fade out loading screen
-                $(".loading").fadeOut();
+                checkPlaylistLoadingComplete();
             }
         }
     } else if (refreshRequests.includes(obj.presentationPath)) {
@@ -2944,19 +2965,19 @@ function displayPresentation(obj) {
                                 );
                             }
                             // If this header is part of the selected presentation's playlist
-                            if (this.presentationPath.split(":")[0] == playlistLocation) {
+                            var headerCheck = checkItemInPlaylist(this.presentationPath, playlistLocation);
+                            
+                            if (headerCheck.isInPlaylist) {
                                 // Get the header path
                                 var headerPath = this.presentationPath;
                                 // If the header is not already displayed
                                 if (document.getElementById("header." + headerPath) == null) {
-                                    // Get the index of the header in the playlist
-                                    var headerIndex = parseInt(this.presentationPath.split(":")[1]);
                                     // Create the presentation container in the presentation data
                                     var headerData = '<div id="header.' + headerPath + '">' +
                                         '<div class="header-header padded">' + this.presentation.presentationName + '</div>' +
                                         '</div>';
                                     // Add the header data to the array
-                                    data.push({ presentationIndex: headerIndex, presentationData: headerData });
+                                    data.push({ presentationIndex: headerCheck.itemIndex, presentationData: headerData });
                                 }
                             }
                         }
@@ -2984,13 +3005,13 @@ function displayPresentation(obj) {
                                 );
                             }
                             // If this media item is part of the selected presentation's playlist
-                            if (playlistMedia.presentationPath.split(":")[0] == playlistLocation) {
+                            var mediaCheck = checkItemInPlaylist(playlistMedia.presentationPath, playlistLocation);
+                            
+                            if (mediaCheck.isInPlaylist) {
                                 // Get the media item path
                                 var mediaPath = playlistMedia.presentationPath;
                                 // If the media item is not already displayed
                                 if (document.getElementById("presentation." + mediaPath) == null) {
-                                    // Get the index of the media item in the playlist
-                                    var mediaIndex = parseInt(playlistMedia.presentationPath.split(":")[1]);
                                     // Create the presentation container in the presentation data
                                     var mediaData = '<div id="presentation.' + mediaPath + '">' +
                                         '<div class="presentation-header padded">' + playlistMedia.presentation.presentationName + '<div class="presentation-controls">' + getPresentationDestination(playlistMedia.presentation.presentationDestination) + '</div></div>' +
@@ -2998,7 +3019,7 @@ function displayPresentation(obj) {
                                         '<div id="media.' + mediaPath + '" class="media-container "><div class="media-image">' + getMediaIcon(playlistMedia) + '</div><a id="' + mediaPath + '" onclick="triggerSlide(this);"><div class="media ' + getMediaType(playlistMedia) + '"><i class="far fa-play-circle"></i></div></a><div class="media-name">' + playlistMedia.presentation.presentationName + '</div></div>' +
                                         '</div></div>';
                                     // Add the media data to the array
-                                    data.push({ presentationIndex: mediaIndex, presentationData: mediaData });
+                                    data.push({ presentationIndex: mediaCheck.itemIndex, presentationData: mediaData });
 
                                 }
                             }

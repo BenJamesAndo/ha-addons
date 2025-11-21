@@ -1243,6 +1243,7 @@ var ProPresenterAPI = (function() {
                                 slideEnabled: slide.enabled !== false,
                                 slideNotes: slide.notes || '',
                                 slideText: slide.text || '',
+                                slideLabel: slide.label || '',
                                 slideImage: baseURL + '/v1/presentation/' + presId + '/thumbnail/' + slideIndex + '?quality=' + (originalCmd.presentationSlideQuality || '200'),
                                 slideIndex: slideIndex
                             };
