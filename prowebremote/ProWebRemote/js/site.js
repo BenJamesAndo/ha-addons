@@ -27,9 +27,10 @@ var initialPresentationLocation;
 var slideView = 1;
 var slideCols = 3;
 var data;
-var wsUri;
-var remoteWebSocket;
 var resetTimeout;
+
+// Initialize OpenAPI presentation request counter
+window.presentationRequestsPending = 0;
 var serverIsWindows;
 var playlistTriggerIndex = false;
 var refresh = true;
@@ -52,19 +53,20 @@ function connect() {
     $("#connecting-loader").fadeIn();
     // Show disconnected status
     $("#status").attr("class", "disconnected");
-    // Set WebSocket uri - use wss:// only if page is loaded over https://
-    var wsProtocol = (window.location.protocol === "https:") ? "wss://" : "ws://";
-    wsUri = wsProtocol + host + ":" + port;
-    remoteWebSocket = new WebSocket(wsUri + "/remote");
-    remoteWebSocket.onopen = function () { onOpen(); };
-    remoteWebSocket.onclose = function () { onClose(); };
-    remoteWebSocket.onmessage = function (evt) { onMessage(evt); };
-    remoteWebSocket.onerror = function (evt) { onError(evt); };
+    
+    // Use ProPresenterAPI instead of direct WebSocket
+    ProPresenterAPI.setCallbacks({
+        onOpen: onOpen,
+        onClose: onClose,
+        onMessage: onMessage,
+        onError: onError
+    });
+    ProPresenterAPI.connect();
 }
 
 function onOpen() {
     if (!authenticated) {
-        remoteWebSocket.send('{"action":"authenticate","protocol":"701","password":"' + pass + '"}');
+        ProPresenterAPI.send('{"action":"authenticate","protocol":"701","password":"' + pass + '"}');
     }
 }
 
@@ -75,9 +77,7 @@ function onMessage(evt) {
     }
     try {
         var obj = JSON.parse(evt.data);
-        console.log(obj);
     } catch (e) {
-        console.error("JSON parse error:", e, "Raw data:", evt.data);
         return;
     }
     if (obj.action == "authenticate" && obj.authenticated == "1" && authenticated == false) {
@@ -106,7 +106,7 @@ function onMessage(evt) {
         clearTimeout(resetTimeout);
     } else if (obj.action == "libraryRequest") {
         // Check if this is a Windows ProPresenter instance
-        if (obj.library[0].includes(":")) {
+        if (obj.library && obj.library.length > 0 && obj.library[0].includes(":")) {
             serverIsWindows = true;
         } else {
             serverIsWindows = false;
@@ -256,19 +256,48 @@ function onMessage(evt) {
     } else if (obj.action == "presentationCurrent") {
         // If this presentation has images, process normally
         if (obj.presentation && obj.presentation.presentationSlideGroups && obj.presentation.presentationSlideGroups.length > 0) {
-            if (obj.presentation.presentationSlideGroups[0].groupSlides[0].slideImage != "") {
+            var firstGroup = obj.presentation.presentationSlideGroups[0];
+            // Check if we're using OpenAPI (needs slideImage loaded) or Classic (works without)
+            var usingOpenAPI = (typeof api !== 'undefined' && api.isUsingOpenAPI());
+            var hasSlideImage = firstGroup.groupSlides && firstGroup.groupSlides.length > 0 && firstGroup.groupSlides[0].slideImage != "";
+            
+            // For OpenAPI: require slideImage. For Classic: slideImage check only
+            if (hasSlideImage || (!usingOpenAPI && firstGroup.groupSlides && firstGroup.groupSlides.length > 0)) {
                 // Create presentation
                 createPresentation(obj);
             }
         } else if (obj.presentation) {
-            // Compare presentations
-            comparePresentations(obj);
+            // For presentations with no slides, we still need to remove them from playlistRequests
+            // Find and remove the request if it exists
+            var playlistRequest = findRequestByPath(playlistRequests, obj.presentationPath);
+            if (playlistRequest != null) {
+                removeArrayValue(playlistRequests, playlistRequest);
+                
+                if (playlistRequests.length == 0) {
+                    // Get the current displayed presentation from ProPresenter
+                    getCurrentPresentation();
+                    // Show connected status
+                    $("#status").attr("class", "connected");
+                    // Fade out loading screen
+                    $(".loading").fadeOut();
+                }
+            } else {
+                // Compare presentations (for updates to existing presentations)
+                comparePresentations(obj);
+            }
         }
     } else if (obj.action == "presentationSlideIndex") {
-        // Check if the slide index is not -1
-        if (obj.slideIndex != -1) {
-            // Display the current ProPresenter presentation
-            displayPresentation(obj);
+        // Check if the slide index is valid
+        if (obj.slideIndex != -1 && obj.slideIndex !== null && obj.slideIndex !== undefined) {
+            // For status stream updates with just slideIndex and presentationPath,
+            // we can update the UI directly without reloading the presentation
+            if (obj.presentationPath && (typeof obj.slideIndex === 'number' || !isNaN(parseInt(obj.slideIndex)))) {
+                // Just update the slide selection in the UI
+                updateSlideSelection(obj.presentationPath, obj.slideIndex);
+            } else {
+                // Fall back to full presentation display for other cases
+                displayPresentation(obj);
+            }
         }
     } else if (obj.action == "presentationTriggerIndex") {
         // Display the current ProPresenter presentation
@@ -287,7 +316,6 @@ function onMessage(evt) {
         }
         if (serverIsWindows) {
             if (!isNaN(obj.presentationPath.charAt(0))) {
-                console.log("IsPlaylistTrigger");
                 playlistTriggerIndex = true;
             } else {
                 playlistTriggerIndex = false;
@@ -342,13 +370,62 @@ function onMessage(evt) {
     } else if (obj.action == "clearAnnouncements") {
         // Set clear announcements
         setClearAnnouncements();
+    } else if (obj.action == "setClearSlide") {
+        // Set clear slide button state
+        if (obj.active) {
+            $("#clear-slide").addClass("activated");
+        } else {
+            $("#clear-slide").removeClass("activated");
+        }
+    } else if (obj.action == "setClearAll") {
+        // Set clear all button state
+        if (obj.active) {
+            $("#clear-all").addClass("activated");
+        } else {
+            $("#clear-all").removeClass("activated");
+        }
+    } else if (obj.action == "setClearAudio") {
+        // Set clear audio button state
+        if (obj.active) {
+            $("#clear-audio").addClass("activated");
+        } else {
+            $("#clear-audio").removeClass("activated");
+        }
+    } else if (obj.action == "setClearMessages") {
+        // Set clear messages button state
+        if (obj.active) {
+            $("#clear-text").addClass("activated");
+        } else {
+            $("#clear-text").removeClass("activated");
+        }
+    } else if (obj.action == "setClearAnnouncements") {
+        // Set clear announcements button state
+        if (obj.active) {
+            $("#clear-announcements").addClass("activated");
+        } else {
+            $("#clear-announcements").removeClass("activated");
+        }
+    } else if (obj.action == "setClearProps") {
+        // Set clear props button state
+        if (obj.active) {
+            $("#clear-props").addClass("activated");
+        } else {
+            $("#clear-props").removeClass("activated");
+        }
+    } else if (obj.action == "setClearVideo") {
+        // Set clear video button state
+        if (obj.active) {
+            $("#clear-media").addClass("activated");
+        } else {
+            $("#clear-media").removeClass("activated");
+        }
     }
 }
 
 function onError(evt) {
     authenticated = false;
     console.error('Socket encountered error: ', evt.message, 'Closing socket');
-    remoteWebSocket.close();
+    ProPresenterAPI.close();
 }
 
 function onClose() {
@@ -556,6 +633,7 @@ function createPlaylistGroup(obj) {
 function createPlaylist(obj) {
     var playlistData = '<a class="display-playlist" onclick="displayPlaylist(this);"><div class="item lib playlist presentation ' + getNested(obj) + '"><img src="img/playlist.png"/><div class="name" id="pp-' + obj.playlistLocation + '">' + obj.playlistName + '</div></div></a>';
     playlistList.push(obj);
+    
     obj.playlist.forEach(
         function (item) {
             if (item.playlistItemType == "playlistItemTypeHeader") {
@@ -572,9 +650,14 @@ function createPlaylist(obj) {
                 playlistMediaList.push(playlistAudio);
             } else {
                 // Add this playlist item location to the requests array
-                playlistRequests.push({ name: item.playlistItemName, location: item.playlistItemLocation });
-                // Get the presentation in the playlist from ProPresenter
-                getPresentation(item.playlistItemLocation);
+                // Store both the item UUID (location) and presentation UUID if available
+                playlistRequests.push({ 
+                    name: item.playlistItemName, 
+                    location: item.playlistItemLocation,
+                    presentationUUID: item.presentationUUID  // Presentation UUID for API calls
+                });
+                // Get the presentation - use item location as unique ID, but fetch using presentation UUID
+                getPresentation(item.playlistItemLocation, item.presentationUUID);
             }
         }
     );
@@ -817,46 +900,57 @@ function createPresentationName(obj) {
 }
 
 function createPresentation(obj) {
-    // Variable to hold the correct index
-    var count = 0;
+    try {
+        // Variable to hold the correct index
+        var count = 0;
 
-    // Variable to hold the playlist request
-    var playlistRequest;
-    // Check if this is a Windows ProPresenter instance
-    if (serverIsWindows && libraryRequests.length == 0) {
-        // Find the playlist request by name
-        playlistRequest = findRequestByName(playlistRequests, obj.presentation.presentationName);
-        // If there is no playlist request
-        if (playlistRequest == null) {
-            if (playlistTriggerIndex) {
-                // set the correct presentation path from the currently existing playlist presentation path
-                obj.presentationPath = findPresentationByBottomPath(playlistPresentationList, obj.presentationPath).presentationPath;
+        // Variable to hold the playlist request
+        var playlistRequest;
+        // Check if this is a Windows ProPresenter instance
+        if (serverIsWindows && libraryRequests.length == 0) {
+            // Find the playlist request by name
+            playlistRequest = findRequestByName(playlistRequests, obj.presentation.presentationName);
+            // If there is no playlist request
+            if (playlistRequest == null) {
+                if (playlistTriggerIndex) {
+                    // set the correct presentation path from the currently existing playlist presentation path
+                    obj.presentationPath = findPresentationByBottomPath(playlistPresentationList, obj.presentationPath).presentationPath;
+                }
+            } else {
+                // set the correct presentation path
+                obj.presentationPath = playlistRequest.location;
             }
         } else {
-            // set the correct presentation path
-            obj.presentationPath = playlistRequest.location;
+            // Find the playlist request by presentation path
+            playlistRequest = findRequestByPath(playlistRequests, obj.presentationPath);
         }
-    } else {
-        // Find the playlist request by presentation path
-        playlistRequest = findRequestByPath(playlistRequests, obj.presentationPath);
-    }
-
-    // Set the correct index for grouped slides
-    obj.presentation.presentationSlideGroups.forEach(
-        function (presentationSlideGroup) {
-            presentationSlideGroup.groupSlides.forEach(
-                function (groupSlide) {
-                    // Set the current count as the slide index
-                    groupSlide.slideIndex = count;
-                    count++;
-                }
-            );
-        }
-    );
-    // Create variable to hold presentation item
-    var item;
+        // Set the correct index for grouped slides
+        obj.presentation.presentationSlideGroups.forEach(
+            function (presentationSlideGroup) {
+                presentationSlideGroup.groupSlides.forEach(
+                    function (groupSlide) {
+                        // Set the current count as the slide index
+                        groupSlide.slideIndex = count;
+                        count++;
+                    }
+                );
+            }
+        );
+        
+        // Create variable to hold presentation item
+        var item;
     // Add this presentation to either the playlist or library presentation list
-    if (!isNaN(obj.presentationPath.charAt(0))) {
+    
+    // Check if this is an OpenAPI library path
+    var isOpenAPILibrary = obj.presentationPath.indexOf('OpenAPI/Libraries/') === 0;
+    
+    // Check if presentationPath is Classic format (contains colon like "0:1") or OpenAPI UUID
+    // Classic: "playlistIndex:itemIndex" format with colon
+    // OpenAPI: UUID format without colon (or with hyphens)
+    var isNumericPath = obj.presentationPath.includes(':') && !obj.presentationPath.includes('-');
+    
+    if (isNumericPath) {
+        // Classic: presentationPath is numeric
         // Get the presentation from the playlist presentation list
         item = findPresentationByTopPath(playlistPresentationList, obj.presentationPath);
 
@@ -888,6 +982,91 @@ function createPresentation(obj) {
             // Get the current slide index
             getCurrentSlide();
         }
+    } else if (isOpenAPILibrary) {
+        // OpenAPI Library: presentationPath is "OpenAPI/Libraries/{LibraryName}/{PresentationName}/{uuid}"
+        item = findPresentationByTopPath(libraryPresentationList, obj.presentationPath);
+        
+        // If this is a library item request
+        if (libraryRequests.includes(obj.presentationPath)) {
+            // Check if the presentation is unique and should be added to the end of the array
+            if (item == null) {
+                // Add presentation to end of array
+                libraryPresentationList.push(obj);
+                // Remove the request from the array
+                removeArrayValue(libraryRequests, obj.presentationPath);
+            }
+            if (libraryRequests.length == 0) {
+                // Get the current displayed presentation from ProPresenter
+                getCurrentPresentation();
+                // Show connected status
+                $("#status").attr("class", "connected");
+                // Fade out loading screen
+                $(".loading").fadeOut();
+            }
+        } else if (refreshRequests.includes(obj.presentationPath)) {
+            // Replace presentation currently in array with updated presentation
+            replaceArrayValue(libraryPresentationList, item, obj);
+            // Refresh presentation if currently displayed
+            refreshPresentation(obj.presentationPath);
+        } else {
+            // Direct library request (not from initial loading)
+            if (item == null) {
+                libraryPresentationList.push(obj);
+            }
+            // Set the initial presentation location
+            initialPresentationLocation = obj.presentationPath;
+            // Get the current slide index
+            getCurrentSlide();
+        }
+    } else if (typeof api !== 'undefined' && api.isUsingOpenAPI()) {
+        // OpenAPI Playlist: presentationPath is UUID (not numeric, not library path)
+        item = findPresentationByTopPath(playlistPresentationList, obj.presentationPath);
+
+        // If this is a playlist item request
+        if (playlistRequest != null) {
+            // For duplicate presentations in playlists, preserve the presentationUUID from the request
+            if (playlistRequest.presentationUUID && obj.presentationUUID) {
+                // Already set from the message
+            } else if (playlistRequest.presentationUUID) {
+                // Add presentationUUID to obj for API calls
+                obj.presentationUUID = playlistRequest.presentationUUID;
+            }
+            
+            // Check if the presentation is unique and should be added to the end of the array
+            if (item == null) {
+                // Add presentation to end of array
+                playlistPresentationList.push(obj);
+                // Remove the request from the array
+                removeArrayValue(playlistRequests, playlistRequest);
+            }
+            if (playlistRequests.length == 0) {
+                // Get the current displayed presentation from ProPresenter
+                getCurrentPresentation();
+                // Show connected status
+                $("#status").attr("class", "connected");
+                // Fade out loading screen
+                $(".loading").fadeOut();
+            }
+        } else {
+            // For OpenAPI, also track in playlist if not in requests
+            if (item == null) {
+                playlistPresentationList.push(obj);
+            }
+            // Check if all presentations have been loaded
+            if (playlistRequests.length == 0 && playlistPresentationList.length > 0) {
+                // Get the current displayed presentation from ProPresenter
+                getCurrentPresentation();
+                // Show connected status
+                $("#status").attr("class", "connected");
+                // Fade out loading screen
+                $(".loading").fadeOut();
+            }
+        }
+    } else if (refreshRequests.includes(obj.presentationPath)) {
+        // Replace presentation currently in array with updated presentation
+        replaceArrayValue(playlistPresentationList, item, obj);
+        // Refresh presentation if currently displayed
+        refreshPresentation(obj.presentationPath);
     } else {
         // Get the presentation from the library presentation list
         item = findPresentationByTopPath(libraryPresentationList, obj.presentationPath);
@@ -926,6 +1105,11 @@ function createPresentation(obj) {
             $("#status").attr("class", "connected");
         }
     }
+    } catch (error) {
+        console.error('ERROR in createPresentation:', error);
+        console.error('Stack:', error.stack);
+        console.error('Presentation data:', obj);
+    }
 }
 
 // End Build Functions
@@ -934,7 +1118,7 @@ function createPresentation(obj) {
 // Clear Functions
 
 function clearAll() {
-    remoteWebSocket.send('{"action":"clearAll"}');
+    ProPresenterAPI.send('{"action":"clearAll"}');
     setClearAll();
 }
 
@@ -960,7 +1144,7 @@ function setClearAll() {
 }
 
 function clearAudio() {
-    remoteWebSocket.send('{"action":"clearAudio"}');
+    ProPresenterAPI.send('{"action":"clearAudio"}');
     setClearAudio();
 }
 
@@ -977,7 +1161,7 @@ function setClearAudio() {
 }
 
 function clearMessages() {
-    remoteWebSocket.send('{"action":"clearMessages"}');
+    ProPresenterAPI.send('{"action":"clearMessages"}');
     $("#clear-messages").removeClass("activated");
     $(".message-timer-controls").hide();
     if ($(".icons a.activated").not("#clear-all").length < 1) {
@@ -986,7 +1170,7 @@ function clearMessages() {
 }
 
 function clearProps() {
-    remoteWebSocket.send('{"action":"clearProps"}');
+    ProPresenterAPI.send('{"action":"clearProps"}');
     $("#clear-props").removeClass("activated");
     if ($(".icons a.activated").not("#clear-all").length < 1) {
         $("#clear-all").removeClass("activated");
@@ -994,7 +1178,7 @@ function clearProps() {
 }
 
 function clearAnnouncements() {
-    remoteWebSocket.send('{"action":"clearAnnouncements"}');
+    ProPresenterAPI.send('{"action":"clearAnnouncements"}');
     $("#clear-announcements").removeClass("activated");
     if ($(".icons a.activated").not("#clear-all").length < 1) {
         $("#clear-all").removeClass("activated");
@@ -1012,7 +1196,7 @@ function setClearAnnouncements() {
 
 function clearSlide() {
     $('#live').empty();
-    remoteWebSocket.send('{"action":"clearText"}');
+    ProPresenterAPI.send('{"action":"clearSlide"}');
     $("#clear-slide").removeClass("activated");
     if ($(".icons a.activated").not("#clear-all").length < 1) {
         $("#clear-all").removeClass("activated");
@@ -1022,7 +1206,7 @@ function clearSlide() {
 }
 
 function clearMedia() {
-    remoteWebSocket.send('{"action":"clearVideo"}');
+    ProPresenterAPI.send('{"action":"clearVideo"}');
     $("#clear-media").removeClass("activated");
     $(".playing-timeline").empty();
     if ($(".icons a.activated").not("#clear-all").length < 1) {
@@ -1081,7 +1265,7 @@ function setCurrentSlide(index, location, presentationDestination) {
                                     function () {
                                         if (this.slideIndex == index - 1) {
                                             var image = new Image();
-                                            image.src = 'data:image/png;base64,' + this.slideImage;
+                                            image.src = getImageSrc(this.slideImage);
                                             $('#live').empty();
                                             $('#live').append(image);
                                         }
@@ -1103,7 +1287,7 @@ function setCurrentSlide(index, location, presentationDestination) {
                                     function () {
                                         if (this.slideIndex == index - 1) {
                                             var image = new Image();
-                                            image.src = 'data:image/png;base64,' + this.slideImage;
+                                            image.src = getImageSrc(this.slideImage);
                                             $('#live').empty();
                                             $('#live').append(image);
                                         }
@@ -1167,52 +1351,60 @@ function setPresentationDestination(location, presentationDestination) {
 
 function getCurrentPresentation() {
     // Send the request to ProPresenter
-    remoteWebSocket.send('{"action":"presentationCurrent", "presentationSlideQuality": "300"}');
+    ProPresenterAPI.send('{"action":"presentationCurrent", "presentationSlideQuality": "300"}');
 }
 
 function getCurrentPresentationNoImage() {
     // Send the request to ProPresenter
-    remoteWebSocket.send('{"action":"presentationCurrent", "presentationSlideQuality": "0"}');
+    ProPresenterAPI.send('{"action":"presentationCurrent", "presentationSlideQuality": "0"}');
 }
 
 function getCurrentSlide() {
     // Send the request to ProPresenter
-    remoteWebSocket.send('{"action":"presentationSlideIndex"}');
+    ProPresenterAPI.send('{"action":"presentationSlideIndex"}');
 }
 
 function getCurrentAudio() {
     // Send the request to ProPresenter
-    remoteWebSocket.send('{"action":"audioCurrentSong"}');
+    ProPresenterAPI.send('{"action":"audioCurrentSong"}');
 }
 
 function getAudioStatus() {
     // Send the request to ProPresenter
-    remoteWebSocket.send('{"action":"audioIsPlaying"}');
+    ProPresenterAPI.send('{"action":"audioIsPlaying"}');
 }
 
 function getClocks() {
     // Send the request to ProPresenter
-    remoteWebSocket.send('{"action":"clockRequest"}');
+    ProPresenterAPI.send('{"action":"clockRequest"}');
 }
 
 function getMessages() {
     // Send the request to ProPresenter
-    remoteWebSocket.send('{"action":"messageRequest"}');
+    ProPresenterAPI.send('{"action":"messageRequest"}');
 }
 
 function getStageLayouts() {
     // Send the request to ProPresenter
-    remoteWebSocket.send('{"action":"stageDisplaySets"}');
+    ProPresenterAPI.send('{"action":"stageDisplaySets"}');
 }
 
-function getPresentation(location) {
+function getPresentation(location, presentationUUID) {
+    // For playlist items with duplicate presentations:
+    // - location is the unique playlist item UUID  
+    // - presentationUUID is the actual presentation UUID to fetch from API
     // Send the request to ProPresenter
-    remoteWebSocket.send('{"action": "presentationRequest","presentationPath": "' + location + '", "presentationSlideQuality": "300"}');
+    if (presentationUUID) {
+        // Include both the unique location and the presentation UUID for API fetch
+        ProPresenterAPI.send('{"action": "presentationRequest","presentationPath": "' + location + '", "presentationUUID": "' + presentationUUID + '", "presentationSlideQuality": "300"}');
+    } else {
+        ProPresenterAPI.send('{"action": "presentationRequest","presentationPath": "' + location + '", "presentationSlideQuality": "300"}');
+    }
 }
 
 function getLibrary() {
     // Send the request to ProPresenter
-    remoteWebSocket.send('{"action":"libraryRequest"}');
+    ProPresenterAPI.send('{"action":"libraryRequest"}');
     // Empty the library presentation list
     libraryPresentationList = [];
     // Empty the library items area
@@ -1225,7 +1417,7 @@ function getLibrary() {
 
 function getPlaylists() {
     // Send the request to ProPresenter
-    remoteWebSocket.send('{"action":"playlistRequestAll"}');
+    ProPresenterAPI.send('{"action":"playlistRequestAll"}');
     // Empty the playlist presentation list
     playlistPresentationList = [];
     // Empty the playlist list
@@ -1236,7 +1428,7 @@ function getPlaylists() {
 
 function getAudioPlaylists() {
     // Send the request to ProPresenter
-    remoteWebSocket.send('{"action":"audioRequest"}');
+    ProPresenterAPI.send('{"action":"audioRequest"}');
     // Empty the audio playlist list
     audioPlaylistList = [];
     // Empty the audio items area
@@ -1286,11 +1478,11 @@ function toggleUseCookies(obj) {
 }
 
 function toggleAudioPlayPause() {
-    remoteWebSocket.send('{"action":"audioPlayPause"}');
+    ProPresenterAPI.send('{"action":"audioPlayPause"}');
 }
 
 function toggleTimelinePlayPause() {
-    remoteWebSocket.send('{"action":"timelinePlayPause","presentationPath":""}');
+    ProPresenterAPI.send('{"action":"timelinePlayPause","presentationPath":""}');
 }
 
 function togglePlaylistVisibility(obj) {
@@ -1327,10 +1519,10 @@ function toggleClockState(int) {
         // Start receiving clock times from ProPresenter
         startReceivingClockData();
         // Start the clock
-        remoteWebSocket.send('{"action":"clockStart","clockIndex":"' + int + '"}');
+        ProPresenterAPI.send('{"action":"clockStart","clockIndex":"' + int + '"}');
     } else {
         // Stop the clock
-        remoteWebSocket.send('{"action":"clockStop","clockIndex":"' + int + '"}');
+        ProPresenterAPI.send('{"action":"clockStop","clockIndex":"' + int + '"}');
     }
 }
 
@@ -1364,21 +1556,21 @@ function updateClock(clockIndex) {
         // Get the clock duration / start time / count to time
         var clockDuration = document.getElementById("clock-" + clockIndex + "-duration").value;
         // Send the change to ProPresenter
-        remoteWebSocket.send('{"action":"clockUpdate","clockIndex":"' + clockIndex + '","clockType":"0","clockName":"' + clockName + '","clockTime":"' + clockDuration + '","clockOverrun":"' + clockOverrun + '"}');
+        ProPresenterAPI.send('{"action":"clockUpdate","clockIndex":"' + clockIndex + '","clockType":"0","clockName":"' + clockName + '","clockTime":"' + clockDuration + '","clockOverrun":"' + clockOverrun + '"}');
     } else if (clockType == 1) {
         // Get the clock count to time
         var clockTime = document.getElementById("clock-" + clockIndex + "-time").value;
         // Get the clock format
         var clockFormat = document.getElementById("clock-" + clockIndex + "-format").value;
         // Send the change to ProPresenter
-        remoteWebSocket.send('{"action":"clockUpdate","clockIndex":"' + clockIndex + '","clockType":"1","clockName":"' + clockName + '","clockElapsedTime":"' + clockTime + '","clockOverrun":"' + clockOverrun + '","clockTimePeriodFormat":"' + clockFormat + '"}');
+        ProPresenterAPI.send('{"action":"clockUpdate","clockIndex":"' + clockIndex + '","clockType":"1","clockName":"' + clockName + '","clockElapsedTime":"' + clockTime + '","clockOverrun":"' + clockOverrun + '","clockTimePeriodFormat":"' + clockFormat + '"}');
     } else {
         // Get the clock start time
         var clockStart = document.getElementById("clock-" + clockIndex + "-start").value;
         // Get the clock end time
         var clockEndTime = getClockEndTimeFormat(document.getElementById("clock-" + clockIndex + "-end").value);
         // Send the change to ProPresenter
-        remoteWebSocket.send('{"action":"clockUpdate","clockIndex":"' + clockIndex + '","clockType":"2","clockName":"' + clockName + '","clockTime":"' + clockStart + '","clockOverrun":"' + clockOverrun + '","clockElapsedTime":"' + clockEndTime + '"}');
+        ProPresenterAPI.send('{"action":"clockUpdate","clockIndex":"' + clockIndex + '","clockType":"2","clockName":"' + clockName + '","clockTime":"' + clockStart + '","clockOverrun":"' + clockOverrun + '","clockElapsedTime":"' + clockEndTime + '"}');
     }
 }
 
@@ -1394,21 +1586,21 @@ function updateMessageClock(clockIndex) {
         // Get the clock duration / start time / count to time
         var clockDuration = document.getElementById("messageclock-" + clockIndex + "-duration").value;
         // Send the change to ProPresenter
-        remoteWebSocket.send('{"action":"clockUpdate","clockIndex":"' + clockIndex + '","clockType":"0","clockName":"' + clockName + '","clockTime":"' + clockDuration + '","clockOverrun":"' + clockOverrun + '"}');
+        ProPresenterAPI.send('{"action":"clockUpdate","clockIndex":"' + clockIndex + '","clockType":"0","clockName":"' + clockName + '","clockTime":"' + clockDuration + '","clockOverrun":"' + clockOverrun + '"}');
     } else if (clockType == 1) {
         // Get the clock count to time
         var clockTime = document.getElementById("messageclock-" + clockIndex + "-time").value;
         // Get the clock format
         var clockFormat = document.getElementById("messageclock-" + clockIndex + "-format").value;
         // Send the change to ProPresenter
-        remoteWebSocket.send('{"action":"clockUpdate","clockIndex":"' + clockIndex + '","clockType":"1","clockName":"' + clockName + '","clockElapsedTime":"' + clockTime + '","clockOverrun":"' + clockOverrun + '","clockTimePeriodFormat":"' + clockFormat + '"}');
+        ProPresenterAPI.send('{"action":"clockUpdate","clockIndex":"' + clockIndex + '","clockType":"1","clockName":"' + clockName + '","clockElapsedTime":"' + clockTime + '","clockOverrun":"' + clockOverrun + '","clockTimePeriodFormat":"' + clockFormat + '"}');
     } else {
         // Get the clock start time
         var clockStart = document.getElementById("messageclock-" + clockIndex + "-start").value;
         // Get the clock end time
         var clockEndTime = getClockEndTimeFormat(document.getElementById("messageclock-" + clockIndex + "-end").value);
         // Send the change to ProPresenter
-        remoteWebSocket.send('{"action":"clockUpdate","clockIndex":"' + clockIndex + '","clockType":"2","clockName":"' + clockName + '","clockTime":"' + clockStart + '","clockOverrun":"' + clockOverrun + '","clockElapsedTime":"' + clockEndTime + '"}');
+        ProPresenterAPI.send('{"action":"clockUpdate","clockIndex":"' + clockIndex + '","clockType":"2","clockName":"' + clockName + '","clockTime":"' + clockStart + '","clockOverrun":"' + clockOverrun + '","clockElapsedTime":"' + clockEndTime + '"}');
     }
 }
 
@@ -1633,7 +1825,7 @@ function showMessage() {
         }
     );
     // Send the request to ProPresenter
-    remoteWebSocket.send('{"action":"messageSend","messageIndex":' + messageIndex + ',"messageKeys":' + JSON.stringify(messageKeys) + ',"messageValues":' + JSON.stringify(messageValues) + '}');
+    ProPresenterAPI.send('{"action":"messageSend","messageIndex":' + messageIndex + ',"messageKeys":' + JSON.stringify(messageKeys) + ',"messageValues":' + JSON.stringify(messageValues) + '}');
     // Set clear messages to active
     $("#clear-messages").addClass("activated");
     // Set clear all to active
@@ -1645,26 +1837,26 @@ function showMessage() {
 function hideMessage(obj) {
     var messageIndex = $(obj).parent().attr("id").split(".")[1];
     // Set the request to ProPresenter
-    remoteWebSocket.send('{"action":"messageHide","messageIndex",' + messageIndex + '}');
+    ProPresenterAPI.send('{"action":"messageHide","messageIndex",' + messageIndex + '}');
 }
 
 function clearStageMessage() {
     document.getElementById("stage-message").value = "";
-    remoteWebSocket.send('{"action":"stageDisplayHideMessage"}');
+    ProPresenterAPI.send('{"action":"stageDisplayHideMessage"}');
 }
 
 function hideStageMessage() {
-    remoteWebSocket.send('{"action":"stageDisplayHideMessage"}');
+    ProPresenterAPI.send('{"action":"stageDisplayHideMessage"}');
 }
 
 function showStageMessage() {
     var message = document.getElementById("stage-message").value;
-    remoteWebSocket.send('{"action":"stageDisplaySendMessage","stageDisplayMessage":"' + message + '"}');
+    ProPresenterAPI.send('{"action":"stageDisplaySendMessage","stageDisplayMessage":"' + message + '"}');
 }
 
 function setStageLayout(obj) {
     // Send the change stage layout request to ProPresenter
-    remoteWebSocket.send('{"action":"stageDisplayChangeLayout","stageLayoutUUID":"' + $(obj).val() + '","stageScreenUUID":"' + $(obj).attr("id") + '"}');
+    ProPresenterAPI.send('{"action":"stageDisplayChangeLayout","stageLayoutUUID":"' + $(obj).val() + '","stageScreenUUID":"' + $(obj).attr("id") + '"}');
 }
 
 function deselectItems() {
@@ -1683,31 +1875,31 @@ function stopAllClocks() {
     // Stop receiving clock times from ProPresenter
     stopReceivingClockData();
     // Send the stop all clocks command
-    remoteWebSocket.send('{"action":"clockStopAll"}');
+    ProPresenterAPI.send('{"action":"clockStopAll"}');
 }
 
 function resetAllClocks() {
     // Start receiving clock times from ProPresenter
     startReceivingClockData();
     // Send the reset all clocks command
-    remoteWebSocket.send('{"action":"clockResetAll"}');
+    ProPresenterAPI.send('{"action":"clockResetAll"}');
 }
 
 function startAllClocks() {
     // Start receiving clock times from ProPresenter
     startReceivingClockData();
     // Send the start all clocks command
-    remoteWebSocket.send('{"action":"clockStartAll"}');
+    ProPresenterAPI.send('{"action":"clockStartAll"}');
 }
 
 function startReceivingClockData() {
     // Send the start receiving clock times command
-    remoteWebSocket.send('{"action":"clockStartSendingCurrentTime"}');
+    ProPresenterAPI.send('{"action":"clockStartSendingCurrentTime"}');
 }
 
 function stopReceivingClockData() {
     // Send the stop receiving clock times command
-    remoteWebSocket.send('{"action":"clockStopSendingCurrentTime"}');
+    ProPresenterAPI.send('{"action":"clockStopSendingCurrentTime"}');
 }
 
 function setMessagesClockFormat(obj) {
@@ -1744,7 +1936,7 @@ function resetClock(index) {
     // Start receiving clock times from ProPresenter
     startReceivingClockData();
     // Send the reset clock command
-    remoteWebSocket.send('{"action":"clockReset","clockIndex":"' + index + '"}');
+    ProPresenterAPI.send('{"action":"clockReset","clockIndex":"' + index + '"}');
 }
 
 function setClockName(obj) {
@@ -1834,10 +2026,36 @@ function triggerSlide(obj) {
     var location = ($(obj).attr("id"));
     // Get the slide index
     var index = $(obj).children("div").children("div").children(".slide-number").text() - 1;
+    // Get the presentation destination (0 = presentation layer, 1 = announcement layer)
+    var destination = parseInt($(obj).attr("data-destination")) || 0;
+    // Get the presentation UUID (for duplicate presentations in playlists)
+    var presentationUuid = $(obj).attr("data-presentation-uuid");
+    // console.log('triggerSlide() - location:', location, 'index:', index, 'data-destination attr:', $(obj).attr("data-destination"), 'final destination:', destination);
+    
+    // Update live preview if this is a regular slide (not media)
+    if (!$(obj).children("div").hasClass("media")) {
+        var slideImage = $(obj).find("img").attr("src");
+        if (slideImage) {
+            $('#live').empty();
+            $('#live').append('<img src="' + slideImage + '"/>');
+        }
+    }
+    
     // Check if this is a playlist or library presentation
     if (!isNaN(location.charAt(0))) {
-        // Sent the request to ProPresenter
-        remoteWebSocket.send('{"action":"presentationTriggerIndex","slideIndex":"' + index + '","presentationPath":"' + location + '"}');
+        // Build the command object
+        var command = {
+            action: "presentationTriggerIndex",
+            slideIndex: index,
+            presentationPath: location,
+            presentationDestination: destination
+        };
+        // If we have a presentation UUID (for duplicates), include it
+        if (presentationUuid) {
+            command.presentationUUID = presentationUuid;
+        }
+        // Send the request to ProPresenter
+        ProPresenterAPI.send(JSON.stringify(command));
         // Check if we should follow ProPresenter
         if (followProPresenter) {
             // Remove selected from all playlist items
@@ -1846,8 +2064,19 @@ function triggerSlide(obj) {
             $("#playlist-items").children("a").children("div").removeClass("highlighted");
         }
     } else {
-        // Sent the request to ProPresenter
-        remoteWebSocket.send('{"action":"presentationTriggerIndex","slideIndex":"' + index + '","presentationPath":"' + location.replace(/\//g, "\\/") + '"}');
+        // Build the command object for library/OpenAPI presentations
+        var command = {
+            action: "presentationTriggerIndex",
+            slideIndex: index,
+            presentationPath: location.replace(/\//g, "\\/"),
+            presentationDestination: destination
+        };
+        // If we have a presentation UUID (for duplicates), include it
+        if (presentationUuid) {
+            command.presentationUUID = presentationUuid;
+        }
+        // Send the request to ProPresenter
+        ProPresenterAPI.send(JSON.stringify(command));
         // Check if we should follow ProPresenter
         if (followProPresenter) {
             // Remove selected from all library items
@@ -2027,7 +2256,6 @@ function triggerNextSlide() {
         var currentLocation = $(currentSlide).children("a").attr("id");
         // Get the current slide number
         var currentSlideNumber = parseInt($(currentSlide).find(".slide-number").text());
-        console.log(currentSlideNumber);
         // Get the total slide count
         var totalSlideCount = parseInt($(document.getElementById("presentation." + currentLocation)).children("div.presentation-content").children("div").length);
         // Create variable to determine loop status
@@ -2156,10 +2384,10 @@ function triggerAudio(obj) {
     var location = ($(obj).children("div").attr("id"));
     // Get audio playlist location
     var playlistLocation = location.split(":")[0];
-    // If this is a playlist item
-    if (!isNaN(location.charAt(0))) {
+    // If this is a playlist item (contains a colon separator)
+    if (location && location.indexOf(':') > -1) {
         // Start playing the audio playlist item
-        remoteWebSocket.send('{"action":"audioStartCue","audioChildPath":"' + location + '"}');
+        ProPresenterAPI.send('{"action":"audioStartCue","audioChildPath":"' + location + '"}');
         // Remove selected from audio playlist items
         $("#audio-items").children("a").children("div").removeClass("selected");
         // Remove highlighted from audio playlist items
@@ -2447,6 +2675,79 @@ function displayAudioPlaylist(obj) {
     // Set the playlist as selected
     $(obj).children("div").addClass("selected");
 }
+/**
+ * Update slide selection when ProPresenter slide index changes (from status stream)
+ * @param {string} presentationPath - UUID or presentation path
+ * @param {number} slideIndex - The new slide index
+ */
+function updateSlideSelection(presentationPath, slideIndex) {
+    // Find the presentation container
+    var presentationId = "presentation." + presentationPath;
+    var presentationElement = document.getElementById(presentationId);
+    
+    // For OpenAPI playlists: presentationPath from stream is presentation UUID,
+    // but container ID might be item UUID. Search by presentationUUID if direct lookup fails.
+    if (!presentationElement && typeof api !== 'undefined' && api.isUsingOpenAPI()) {
+        // Search for a match using either presentation.id.uuid OR presentationUUID field
+        var matchingPresentation = playlistPresentationList.find(function(p) {
+            // Check if presentationUUID field matches
+            if (p.presentationUUID === presentationPath) {
+                return true;
+            }
+            // Also check presentation.id.uuid in case it's stored there
+            if (p.presentation && p.presentation.id && p.presentation.id.uuid === presentationPath) {
+                return true;
+            }
+            return false;
+        });
+        
+        if (matchingPresentation && matchingPresentation.presentationPath) {
+            // Use the item UUID (presentationPath) to find the container
+            presentationId = "presentation." + matchingPresentation.presentationPath;
+            presentationElement = document.getElementById(presentationId);
+        }
+    }
+    
+    if (!presentationElement) {
+        // Presentation is not currently displayed
+        // Don't auto-display it - only update if it's already shown
+        // This prevents the stream from hijacking the UI when a different presentation is active
+        return;
+    }
+    
+    // Find all slides in this presentation - use slide-container class which is the correct one
+    var slides = $(presentationElement).find(".slide-container");
+    
+    // Ensure slideIndex is a number
+    var slideNum = parseInt(slideIndex);
+    
+    if (isNaN(slideNum) || slideNum >= slides.length || slideNum < 0) {
+        console.log("Invalid slide index:", slideIndex, "for presentation:", presentationPath, "total slides:", slides.length);
+        return;
+    }
+    
+    // Remove highlighting from all slides in this presentation
+    slides.removeClass("selected");
+    
+    // Add highlighting to the current slide
+    $(slides[slideNum]).addClass("selected");
+    
+    // Activate clear buttons when a slide is active
+    $("#clear-slide").addClass("activated");
+    $("#clear-all").addClass("activated");
+    
+    // Update the live preview with the selected slide's image
+    var selectedSlide = $(slides[slideNum]);
+    if (selectedSlide.length > 0) {
+        var slideImage = selectedSlide.find("img").attr("src");
+        if (slideImage) {
+            $('#live').empty();
+            $('#live').append('<img src="' + slideImage + '"/>');
+        }
+    }
+    
+    // console.log("Updated slide selection to index", slideNum, "in presentation", presentationPath);
+}
 
 function displayPresentation(obj) {
     // Create variable to hold presentation data
@@ -2468,8 +2769,9 @@ function displayPresentation(obj) {
         // Set presentation request to propresenter
         propresenterRequest = true;
         if (obj.action == "presentationSlideIndex") {
-            // Use the initial presentation location
-            location = initialPresentationLocation;
+            // For status stream updates, use the provided presentationPath
+            // For legacy requests, fall back to initialPresentationLocation
+            location = obj.presentationPath || initialPresentationLocation;
             // Use the provided slide index
             slideIndex = parseInt(obj.slideIndex);
         } else if (obj.action == "presentationTriggerIndex") {
@@ -2495,8 +2797,14 @@ function displayPresentation(obj) {
         if (!previousPresentationRequest) {
             // Set a previous presentation request
             previousPresentationRequest = true;
-            // Check if the presentation is a playlist or a library presentation
-            if (!isNaN(location.charAt(0))) {
+            
+            // Determine if this is a playlist or library presentation
+            // For OpenAPI: check if path starts with "OpenAPI/Libraries/"
+            // For Classic: check path format (numeric = playlist, path = library)
+            var isOpenAPILibrary = location.indexOf('OpenAPI/Libraries/') === 0;
+            var isPlaylistPresentation = !isOpenAPILibrary && ((typeof api !== 'undefined' && api.isUsingOpenAPI()) || !isNaN(location.charAt(0)));
+            
+            if (isPlaylistPresentation) {
                 // Create a variable to hold the playlist location
                 var playlistLocation = "";
                 // Create a variable to hold the playlist length
@@ -2573,20 +2881,42 @@ function displayPresentation(obj) {
                             }
 
                             // If this presentation is part of the selected presentation's playlist
-                            if (this.presentationPath.split(":")[0] == playlistLocation) {
+                            // For Classic: presentationPath is "playlistIndex:itemIndex", check if first part matches playlistLocation
+                            // For OpenAPI: presentationPath is item UUID, need to check if it's in the current playlist
+                            var isInCurrentPlaylist = false;
+                            var presentationIndex = 0;
+                            
+                            if (this.presentationPath.includes(":")) {
+                                // Classic format: "playlist:index"
+                                isInCurrentPlaylist = (this.presentationPath.split(":")[0] == playlistLocation);
+                                presentationIndex = parseInt(this.presentationPath.split(":")[1]);
+                            } else {
+                                // OpenAPI format: Check if this presentation's UUID is in the current playlist
+                                // Find the playlist object to check its items
+                                var currentPlaylistObj = playlistList.find(function(p) { return p.playlistLocation == playlistLocation; });
+                                if (currentPlaylistObj && currentPlaylistObj.playlist) {
+                                    var itemIndex = currentPlaylistObj.playlist.findIndex(function(item) {
+                                        return item.playlistItemLocation == this.presentationPath;
+                                    }.bind(this));
+                                    if (itemIndex !== -1) {
+                                        isInCurrentPlaylist = true;
+                                        presentationIndex = itemIndex;
+                                    }
+                                }
+                            }
+                            
+                            if (isInCurrentPlaylist) {
                                 // Get the presentation path
                                 var presentationPath = this.presentationPath;
 
                                 // If the presentation is not already displayed
                                 if (document.getElementById("presentation." + presentationPath) == null) {
-                                    // Get the index of the presentation in the playlist
-                                    var presentationIndex = parseInt(this.presentationPath.split(":")[1]);
                                     // Create the presentation container in the presentation data
                                     var presentationData = '<div id="presentation.' + presentationPath + '" class="presentation">' +
                                         '<div class="presentation-header padded">' + this.presentation.presentationName + '<div class="presentation-controls">' + getPresentationDestination(this.presentation.presentationDestination) + '</div></div>' +
                                         '<div class="presentation-content padded">';
                                     // Generate & add the slides to the presentation data
-                                    presentationData += generateSlides(this.presentation.presentationSlideGroups, presentationPath);
+                                    presentationData += generateSlides(this.presentation.presentationSlideGroups, presentationPath, this.presentation.presentationDestination, this.presentationUUID);
                                     // Add the close tags to the presentation data
                                     presentationData += '</div></div>';
                                     // Add the presentation data to the array
@@ -2721,13 +3051,16 @@ function displayPresentation(obj) {
                                 // If the presentation is not already displayed
                                 if (document.getElementById("presentation." + presentationPath) == null) {
                                     // Get the index of the presentation in the playlist
-                                    var presentationIndex = parseInt(this.presentationPath.split(":")[1]);
+                                    // For Classic: format is "0:1", for OpenAPI: UUID with no ":"
+                                    var presentationIndex = (presentationPath.indexOf(":") > -1) ? 
+                                        parseInt(presentationPath.split(":")[1]) : 
+                                        0; // Default to 0 for OpenAPI UUIDs
                                     // Create the presentation container in the presentation data
                                     var presentationData = '<div id="presentation.' + presentationPath + '" class="presentation">' +
                                         '<div class="presentation-header padded">' + this.presentation.presentationName + '<div class="presentation-controls">' + getPresentationDestination(this.presentation.presentationDestination) + '</div></div>' +
                                         '<div class="presentation-content padded">';
                                     // Generate & add the slides to the presentation data
-                                    presentationData += generateSlides(this.presentation.presentationSlideGroups, presentationPath);
+                                    presentationData += generateSlides(this.presentation.presentationSlideGroups, presentationPath, this.presentation.presentationDestination, this.presentationUUID);
                                     // Add the close tags to the presentation data
                                     presentationData += '</div></div>';
                                     // Empty the presentation content area
@@ -2834,7 +3167,7 @@ function displayPresentation(obj) {
                                     '<div class="presentation-header padded">' + this.presentation.presentationName + '<div class="presentation-controls">' + getPresentationDestination(this.presentation.presentationDestination) + '</div></div>' +
                                     '<div class="presentation-content padded">';
                                 // Generate & add the slides to the presentation data
-                                presentationData += generateSlides(this.presentation.presentationSlideGroups, presentationPath);
+                                presentationData += generateSlides(this.presentation.presentationSlideGroups, presentationPath, this.presentation.presentationDestination, this.presentationUUID);
                                 // Add the close tags to the presentation data
                                 presentationData += '</div></div>';
                                 // Empty the presentation content area
@@ -2931,7 +3264,7 @@ function refreshPresentation(presentationPath) {
         // Remove all slides from the presentation
         $(presentationData).empty();
         // Generate and add the slides to the presentation data
-        $(presentationData).append(generateSlides(item.presentation.presentationSlideGroups, item.presentationPath));
+        $(presentationData).append(generateSlides(item.presentation.presentationSlideGroups, item.presentationPath, item.presentation.presentationDestination, item.presentationUUID));
 
         // Set the slide view
         setSlideView();
@@ -2970,6 +3303,10 @@ function comparePresentations(obj) {
     if (!isNaN(obj.presentationPath.charAt(0))) {
         // Get the presentation from the playlist presentation list
         item = findPresentationByTopPath(playlistPresentationList, obj.presentationPath);
+        // If presentation not found yet (initial load), skip comparison
+        if (!item) {
+            return;
+        }
         // Iterate through each slide group in the presentation
         item.presentation.presentationSlideGroups.forEach(
             function (presentationSlideGroup) {
@@ -2984,6 +3321,10 @@ function comparePresentations(obj) {
     } else {
         // Get the presentation from the library presentation list
         item = findPresentationByTopPath(libraryPresentationList, obj.presentationPath);
+        // If presentation not found yet (initial load), skip comparison
+        if (!item) {
+            return;
+        }
         // Iterate through each slide group in the presentation
         item.presentation.presentationSlideGroups.forEach(
             function (presentationSlideGroup) {
@@ -3006,27 +3347,44 @@ function comparePresentations(obj) {
     }
 }
 
-function generateSlides(presentationSlideGroups, presentationPath) {
+function generateSlides(presentationSlideGroups, presentationPath, presentationDestination, presentationUUID) {
     // Create a variable to hold the slide count
     var count = 1;
     // Create a variable to hold the created slides
     var slidesData = "";
+    // Store presentation destination (0 = presentation layer, 1 = announcement layer, undefined = presentation layer)
+    var destination = presentationDestination || 0;
     // Iterate through each slide group in the presentation
     presentationSlideGroups.forEach(
         function (presentationSlideGroup) {
             // Get the slide group color
+            var colorArray = [];
             if(presentationSlideGroup.groupColor){
-                 var colorArray = presentationSlideGroup.groupColor.split(" ");
-             }else{
-                 var colorArray = new Array();
-             }
+                // Check if it's a string (Classic) or object (OpenAPI)
+                if(typeof presentationSlideGroup.groupColor === 'string'){
+                    // Classic: "1 0.5 0.2"
+                    colorArray = presentationSlideGroup.groupColor.split(" ");
+                } else if(presentationSlideGroup.groupColor.hex){
+                    // OpenAPI: {hex: "#ff8033"} - convert hex to RGB
+                    var hex = presentationSlideGroup.groupColor.hex.replace('#', '');
+                    var r = parseInt(hex.substring(0, 2), 16) / 255;
+                    var g = parseInt(hex.substring(2, 4), 16) / 255;
+                    var b = parseInt(hex.substring(4, 6), 16) / 255;
+                    colorArray = [r, g, b];
+                }
+            }
             // Get the slide group name
             var groupName = presentationSlideGroup.groupName;
             // Iterate through each slide in the slide group
             presentationSlideGroup.groupSlides.forEach(
                 function (groupSlide, index) {
+                    // Build data attributes for the slide
+                    var dataAttrs = 'data-destination="' + destination + '"';
+                    if (presentationUUID) {
+                        dataAttrs += ' data-presentation-uuid="' + presentationUUID + '"';
+                    }
                     // Add the slide to the slides data
-                    slidesData += '<div class="slide-sizer"><div id="slide' + count + '.' + presentationPath + '" class="slide-container ' + getEnabledValue(groupSlide.slideEnabled) + '"><a id="' + presentationPath + '" onclick="triggerSlide(this);"><div class="slide" style="border-color: rgb(' + getRGBValue(colorArray[0]) + ',' + getRGBValue(colorArray[1]) + ',' + getRGBValue(colorArray[2]) + ');"><div class="slide-text">' + getSlideText(groupSlide.slideText) + '</div><img src="data:image/png;base64,' + groupSlide.slideImage + '" draggable="false"/><div class="slide-info" style="background-color: rgb(' + getRGBValue(colorArray[0]) + ',' + getRGBValue(colorArray[1]) + ',' + getRGBValue(colorArray[2]) + ');"><div class="slide-number">' + count + '</div><div class="slide-name">' + getSlideName(index, groupName) + '</div><div class="slide-label">' + getSlideLabel(groupSlide.slideLabel, groupName) + '</div></div></div></a></div></div>';
+                    slidesData += '<div class="slide-sizer"><div id="slide' + count + '.' + presentationPath + '" class="slide-container ' + getEnabledValue(groupSlide.slideEnabled) + '"><a id="' + presentationPath + '" ' + dataAttrs + ' onclick="triggerSlide(this);"><div class="slide" style="border-color: rgb(' + getRGBValue(colorArray[0]) + ',' + getRGBValue(colorArray[1]) + ',' + getRGBValue(colorArray[2]) + ');"><div class="slide-text">' + getSlideText(groupSlide.slideText) + '</div><img src="' + getImageSrc(groupSlide.slideImage) + '" draggable="false"/><div class="slide-info" style="background-color: rgb(' + getRGBValue(colorArray[0]) + ',' + getRGBValue(colorArray[1]) + ',' + getRGBValue(colorArray[2]) + ');"><div class="slide-number">' + count + '</div><div class="slide-name">' + getSlideName(index, groupName) + '</div><div class="slide-label">' + getSlideLabel(groupSlide.slideLabel, groupName) + '</div></div></div></a></div></div>';
                     // Increase the slide count
                     count++;
                 }
@@ -3071,6 +3429,17 @@ function getSlideText(slideText) {
         return slideText.replace(/[\r\n\x0B\x0C\u0085\u2028\u2029]+/g, "<br>");
     } else {
         return "";
+    }
+}
+
+function getImageSrc(slideImage) {
+    // Check if slideImage is a URL (OpenAPI) or base64 data (Classic)
+    if (slideImage && (slideImage.startsWith('http://') || slideImage.startsWith('https://'))) {
+        // It's a URL from OpenAPI, return as-is
+        return slideImage;
+    } else {
+        // It's base64 data from Classic, add the data URI prefix
+        return 'data:image/png;base64,' + slideImage;
     }
 }
 
@@ -3420,7 +3789,7 @@ function cancelAuthenticate() {
     // Set retry connection to disabled
     retryConnection = false;
     // End the WebSocket connection
-    remoteWebSocket.close();
+    ProPresenterAPI.close();
     // Fade-out the loader and text
     $("#connecting-loader").hide();
     // Fade-in authenticate segment
@@ -3443,7 +3812,6 @@ function initialise() {
 
     // Add listener for action keys
     window.addEventListener('keydown', function (e) {
-        console.log(e);
         if (!inputTyping) {
             // When spacebar or right arrow is detected
             if (e.code == "Space" || e.code == "RightArrow" || e.code == "ArrowRight" && e.target == document.body) {
@@ -3453,7 +3821,7 @@ function initialise() {
                     triggerNextSlide();
                 } else {
                     // Trigger the next slide
-                    remoteWebSocket.send('{"action":"presentationTriggerNext"}');
+                    ProPresenterAPI.send('{"action":"presentationTriggerNext"}');
                 }
             }
             // When left arrow is detected
@@ -3464,7 +3832,7 @@ function initialise() {
                     triggerPreviousSlide();
                 } else {
                     // Trigger the previous slide
-                    remoteWebSocket.send('{"action":"presentationTriggerPrevious"}');
+                    ProPresenterAPI.send('{"action":"presentationTriggerPrevious"}');
                 }
             }
         } else if (stageMessageTyping) {
@@ -3539,8 +3907,12 @@ function initialise() {
 // When document is ready
 $(document).ready(function () {
     initialise();
-    // If user must authenticate
-    if (mustAuthenticate) {
+    // Check if authentication is needed
+    // For OpenAPI: skip UI authentication prompt (uses HTTP headers instead)
+    // For Classic: show prompt if mustAuthenticate is true
+    var needsAuthPrompt = mustAuthenticate && (typeof apiType === 'undefined' || apiType === 'classic');
+    
+    if (needsAuthPrompt) {
         // If the user is allowed to update the host
         if (changeHost) {
             // Show the host change container

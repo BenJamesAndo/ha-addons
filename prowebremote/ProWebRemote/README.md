@@ -1,5 +1,5 @@
 # ProWebRemote
-ProWebRemote is a pure HTML/CSS/JS remote control application for ProPresenter 7, styled to look almost identical to ProPresenter 7 on macOS.
+ProWebRemote is a pure HTML/CSS/JS remote control application for ProPresenter 7 and above, styled to look almost identical to ProPresenter 7 on macOS.
 
 ![alt text](https://raw.githubusercontent.com/L2N6H5B3/ProWebRemote/master/Screenshot.png)
 

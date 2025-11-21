@@ -7,10 +7,13 @@ configuration:
     description: ProPresenter Network port
   propresenter_password:
     name: ProPresenter Controller Password
-    description: ProPresenter Remote Classic Controller password
+    description: Controller password (only required for Classic with ProPresenter v7.0-v20.0.1)
+  api_type:
+    name: Connection Type
+    description: "OpenAPI (v7.9.1 and above, recommended) or Classic (v7.0-v20.0.1)"
   must_authenticate:
     name: Require Authentication
-    description: Whether authentication is required to connect (recommended)
+    description: Whether authentication is required (only needed for Classic with password)
   continuous_playlist:
     name: Continuous Playlist Mode
     description: Enable continuous playlist playback

@@ -1,6 +1,6 @@
 name: "ProWebRemote"
-description: "ProPresenter Web Remote with Ingress Support"
-version: "1.0.1"
+description: "ProPresenter Web Remote with Ingress Support and OpenAPI"
+version: "2.0-beta"
 slug: prowebremote
 arch:
   - amd64
@@ -12,8 +12,9 @@ panel_title: ProPresenter Remote
 options:
   propresenter_host: null
   propresenter_port: null
-  propresenter_password: null
-  must_authenticate: true
+  propresenter_password: ""
+  api_type: "Open API"
+  must_authenticate: false
   continuous_playlist: true
   retrieve_entire_library: false
   force_slides: false
@@ -22,6 +23,7 @@ schema:
   propresenter_host: str
   propresenter_port: int
   propresenter_password: str?
+  api_type: list(Open API|Classic)
   must_authenticate: bool
   continuous_playlist: bool
   retrieve_entire_library: bool
