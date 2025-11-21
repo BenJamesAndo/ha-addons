@@ -1,28 +1,16 @@
 # ProWebRemote Addon Changelog
 
-## Version 2.0 - OpenAPI Support
+## Version 2.0-beta - OpenAPI Support
 
 ### New Features
 
-- **OpenAPI v1 Support**: Full implementation of ProPresenter 7's OpenAPI v1 REST API
-  - Real-time status streaming for instant UI updates
-  - Slide image thumbnails loaded directly from API
-  - Support for playlist folders and nested structures
-  - Audio playback controls with track information
-  - Message timer controls
-  - Clear layer commands (slide, audio, messages, props, announcements, media, all)
+- **OpenAPI v1 Support**: Almost full implementation of ProPresenter's OpenAPI. Supports v7.9.1 and up
   
-- **Dual API Mode**: Choose between Classic WebSocket or OpenAPI
-  - Both APIs fully supported through ingress proxy
-  - Seamless switching without code changes
+- **Backwards Compatible**: Choose between Classic WebSocket or OpenAPI
 
-### Configuration
+### Notes
 
-New addon options:
-
-```yaml
-api_type: "classic"  # or "open" for OpenAPI v1
-```
+- **Classic Mode**: Only supports ProPresenter up to v20. From v21 you'll need to use the OpenAPI method.
 
 ---
 
